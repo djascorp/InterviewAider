@@ -25,20 +25,24 @@ SAMPLERATE = 44100
 CHANNELS = 2
 DTYPE = np.int16
 
-# VAD operates on 16 kHz mono — we downsample from 44.1k stereo for VAD only
+# VAD operates on 16 kHz mono — we downsample from capture rate for VAD only
 _VAD_RATE = 16000
 _VAD_FRAME_MS = 30  # 10, 20, or 30 ms
 _VAD_FRAME_SAMPLES = _VAD_RATE * _VAD_FRAME_MS // 1000  # 480 samples
 _VAD_AGGRESSIVENESS = 2  # 0 (least) to 3 (most aggressive)
 
+# Output format for Gemini (downsample before sending)
+_OUTPUT_RATE = 16000
+_OUTPUT_CHANNELS = 1
+
 # ── Segmentation parameters ──────────────────────────────────────────
 _PRE_ROLL_MS = 400  # keep 400ms before speech onset
 _SPEECH_START_FRAMES = 2  # voiced frames needed to trigger (out of last 3)
 _SPEECH_START_WINDOW = 3
-_SILENCE_END_MS = 700  # silence duration to end segment
+_SILENCE_END_MS = 1200  # silence duration to end segment
 _MIN_SEGMENT_MS = 500  # reject segments shorter than this
 _MAX_SEGMENT_SEC = 15  # hard max segment length
-_TAIL_KEEP_MS = 200  # keep some trailing silence
+_TAIL_KEEP_MS = 500  # keep trailing silence to avoid cutting last words
 
 # ── Adaptive noise floor ─────────────────────────────────────────────
 _NOISE_EMA_ALPHA = 0.02  # slow EMA for noise floor
@@ -46,7 +50,7 @@ _ENERGY_GATE_DB = 6  # frame must be this many dB above noise floor
 
 # ── Internal buffering ───────────────────────────────────────────────
 _CALLBACK_BLOCK_MS = 30  # sounddevice callback block size
-_CALLBACK_BLOCK = SAMPLERATE * _CALLBACK_BLOCK_MS // 1000  # ~1323 samples
+_CALLBACK_BLOCK = SAMPLERATE * _CALLBACK_BLOCK_MS // 1000  # 480 samples
 _RAW_QUEUE_MAXSIZE = 100  # ~3 seconds of raw audio
 _SEGMENT_QUEUE_MAXSIZE = 1  # only keep the latest segment
 
@@ -58,13 +62,15 @@ _LOOPBACK_KEYWORDS = ["stereo mix", "mixage", "loopback", "what u hear", "wave o
 
 
 def _save_audio_dump(wav_bytes: bytes) -> None:
-    """Save audio segment to tmp_audio_recordings/ with timestamp."""
-    os.makedirs(_AUDIO_DUMP_DIR, exist_ok=True)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
-    filepath = os.path.join(_AUDIO_DUMP_DIR, f"audio_{timestamp}.wav")
-    with open(filepath, "wb") as f:
-        f.write(wav_bytes)
-    print(f"[audio] Fichier sauvegardé : {filepath}")
+    """Save audio segment to tmp_audio_recordings/ with timestamp (async)."""
+    def _write():
+        os.makedirs(_AUDIO_DUMP_DIR, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
+        filepath = os.path.join(_AUDIO_DUMP_DIR, f"audio_{timestamp}.wav")
+        with open(filepath, "wb") as f:
+            f.write(wav_bytes)
+        print(f"[audio] Fichier sauvegardé : {filepath}")
+    threading.Thread(target=_write, daemon=True).start()
 
 
 class _VadState(Enum):
@@ -88,7 +94,7 @@ class VadCaptureService:
             maxsize=_SEGMENT_QUEUE_MAXSIZE
         )
 
-        # Pre-roll ring buffer (stores original 44.1k stereo chunks)
+        # Pre-roll ring buffer (stores original 44.1kHz stereo chunks)
         pre_roll_chunks = max(1, (_PRE_ROLL_MS * SAMPLERATE) // (1000 * _CALLBACK_BLOCK))
         self._pre_roll: deque[np.ndarray] = deque(maxlen=pre_roll_chunks)
 
@@ -314,14 +320,15 @@ class VadCaptureService:
         full_audio = np.concatenate(self._segment_chunks)
 
         # Trim trailing silence but keep _TAIL_KEEP_MS
-        tail_samples = SAMPLERATE * _TAIL_KEEP_MS // 1000 * CHANNELS
-        silence_tail_samples = (self._silence_samples * SAMPLERATE) // _VAD_RATE * CHANNELS
-        trim = max(0, silence_tail_samples - tail_samples)
+        # len(full_audio) = number of frames for 2D stereo array
+        tail_frames = SAMPLERATE * _TAIL_KEEP_MS // 1000
+        silence_tail_frames = (self._silence_samples * SAMPLERATE) // _VAD_RATE
+        trim = max(0, silence_tail_frames - tail_frames)
         if trim > 0 and trim < len(full_audio):
             full_audio = full_audio[:len(full_audio) - trim]
 
         # Check minimum duration
-        duration_ms = (len(full_audio) * 1000) // (SAMPLERATE * CHANNELS)
+        duration_ms = (len(full_audio) * 1000) // SAMPLERATE
         if duration_ms < _MIN_SEGMENT_MS:
             print(f"[vad] Segment trop court ({duration_ms}ms) → ignoré")
             self._state = _VadState.IDLE
@@ -329,8 +336,10 @@ class VadCaptureService:
             self._segment_samples = 0
             return
 
-        wav_bytes = _encode_wav(full_audio)
-        duration_sec = len(full_audio) / (SAMPLERATE * CHANNELS)
+        # Downsample to 16kHz mono before encoding — reduces payload ~28x
+        mono_16k = self._downmix_resample(full_audio)
+        wav_bytes = _encode_wav(mono_16k, rate=_OUTPUT_RATE, channels=_OUTPUT_CHANNELS)
+        duration_sec = len(full_audio) / SAMPLERATE
         print(f"[vad] Segment finalisé : {duration_sec:.1f}s ({len(wav_bytes)} bytes)")
 
         # Save audio dump
@@ -362,7 +371,7 @@ class VadCaptureService:
         else:
             mono = chunk.flatten().astype(np.int16)
 
-        # Resample 44100 → 16000 using simple decimation with anti-alias
+        # Resample 44100 → 16000 using simple decimation
         ratio = _VAD_RATE / SAMPLERATE  # ~0.3628
         target_len = int(len(mono) * ratio)
         if target_len == 0:
@@ -449,12 +458,12 @@ def compute_rms(pcm: np.ndarray) -> float:
     return float(np.sqrt(np.mean(pcm.astype(np.float64) ** 2)))
 
 
-def _encode_wav(pcm: np.ndarray) -> bytes:
+def _encode_wav(pcm: np.ndarray, rate: int = SAMPLERATE, channels: int = CHANNELS) -> bytes:
     """Encode PCM audio to WAV format in memory."""
     buf = io.BytesIO()
     with wave.open(buf, "wb") as wf:
-        wf.setnchannels(CHANNELS)
+        wf.setnchannels(channels)
         wf.setsampwidth(2)  # int16 = 2 bytes
-        wf.setframerate(SAMPLERATE)
+        wf.setframerate(rate)
         wf.writeframes(pcm.tobytes())
     return buf.getvalue()

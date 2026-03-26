@@ -18,17 +18,30 @@ _SYSTEM_PROMPT = """\
 Tu es un assistant d'entretien technique discret.
 Écoute l'audio et détecte s'il contient une question technique.
 
-Si tu détectes une question technique, réponds UNIQUEMENT avec ce JSON :
-{"question": "la question détectée", "answer": "réponse concise (3-5 phrases)", "bullets": ["point clé 1", "point clé 2", "point clé 3", "point clé 4"]}
+Si une question technique est détectée :
+- "detected" = true
+- "question" = la question détectée
+- "answer" = réponse concise (3-5 phrases, en français)
+- "bullets" = exactement 4 bullet points concis
+- Repondez avec la langue d'origine de la question
 
-Si tu n'entends aucune question claire, réponds UNIQUEMENT : NO_QUESTION
-
-Règles :
-- Réponse en français
-- 3 à 5 phrases max pour "answer"
-- Exactement 4 bullet points concis pour "bullets"
-- JSON valide, sans markdown ni backticks
+Si aucune question claire n'est détectée :
+- "detected" = false (les autres champs peuvent être vides)
 """
+
+_RESPONSE_SCHEMA = types.Schema(
+    type=types.Type.OBJECT,
+    properties={
+        "detected": types.Schema(type=types.Type.BOOLEAN),
+        "question": types.Schema(type=types.Type.STRING),
+        "answer": types.Schema(type=types.Type.STRING),
+        "bullets": types.Schema(
+            type=types.Type.ARRAY,
+            items=types.Schema(type=types.Type.STRING),
+        ),
+    },
+    required=["detected"],
+)
 
 
 @dataclass
@@ -49,6 +62,13 @@ class GeminiClient:
             raise ValueError("GOOGLE_API_KEY not found in environment variables")
 
         self._client = genai.Client(api_key=self._api_key)
+        self._config = types.GenerateContentConfig(
+            system_instruction=_SYSTEM_PROMPT,
+            temperature=0.3,
+            max_output_tokens=2048,
+            response_mime_type="application/json",
+            response_schema=_RESPONSE_SCHEMA,
+        )
 
     def analyze_audio(self, wav_bytes: bytes) -> Optional[AnalysisResult]:
         """Send WAV audio to Gemini and return structured result or None."""
@@ -58,8 +78,8 @@ class GeminiClient:
                 model=_MODEL_NAME,
                 contents=[
                     types.Part.from_bytes(data=wav_bytes, mime_type="audio/wav"),
-                    _SYSTEM_PROMPT,
                 ],
+                config=self._config,
             )
         except Exception as e:
             print(f"[gemini] Error: {e}")
@@ -72,34 +92,22 @@ class GeminiClient:
         return self._parse_response(text, latency)
 
     def _parse_response(self, text: str, latency: str) -> Optional[AnalysisResult]:
-        """Parse Gemini response text into an AnalysisResult."""
-        if "NO_QUESTION" in text:
-            print("[gemini] Pas de question détectée (NO_QUESTION)")
+        """Parse Gemini JSON response into an AnalysisResult."""
+        try:
+            data = json.loads(text)
+        except json.JSONDecodeError:
+            print(f"[gemini] Réponse non-JSON: {text[:100]}")
             return None
 
-        # Strip markdown code fences if present
-        cleaned = text
-        if cleaned.startswith("```"):
-            cleaned = cleaned.split("\n", 1)[-1]
-        if cleaned.endswith("```"):
-            cleaned = cleaned.rsplit("```", 1)[0]
-        cleaned = cleaned.strip()
+        if not data.get("detected", False):
+            print("[gemini] Pas de question détectée")
+            return None
 
-        try:
-            data = json.loads(cleaned)
-            result = AnalysisResult(
-                question=data.get("question", "Question détectée"),
-                answer=data.get("answer", ""),
-                bullets=data.get("bullets", []),
-                latency=latency,
-            )
-            print(f"[gemini] Question détectée : {result.question}")
-            return result
-        except json.JSONDecodeError:
-            print(f"[gemini] Réponse non-JSON, texte brut utilisé")
-            return AnalysisResult(
-                question="Question détectée",
-                answer=text,
-                bullets=[],
-                latency=latency,
-            )
+        result = AnalysisResult(
+            question=data.get("question", "Question détectée"),
+            answer=data.get("answer", ""),
+            bullets=data.get("bullets", []),
+            latency=latency,
+        )
+        print(f"[gemini] Question détectée : {result.question}")
+        return result
