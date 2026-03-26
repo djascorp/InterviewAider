@@ -68,11 +68,13 @@ class GeminiClient:
         elapsed = time.perf_counter() - start
         latency = f"{elapsed:.1f}s"
         text = response.text.strip()
+        print(f"[gemini] Réponse reçue en {latency} ({len(text)} chars)")
         return self._parse_response(text, latency)
 
     def _parse_response(self, text: str, latency: str) -> Optional[AnalysisResult]:
         """Parse Gemini response text into an AnalysisResult."""
         if "NO_QUESTION" in text:
+            print("[gemini] Pas de question détectée (NO_QUESTION)")
             return None
 
         # Strip markdown code fences if present
@@ -85,13 +87,16 @@ class GeminiClient:
 
         try:
             data = json.loads(cleaned)
-            return AnalysisResult(
+            result = AnalysisResult(
                 question=data.get("question", "Question détectée"),
                 answer=data.get("answer", ""),
                 bullets=data.get("bullets", []),
                 latency=latency,
             )
+            print(f"[gemini] Question détectée : {result.question}")
+            return result
         except json.JSONDecodeError:
+            print(f"[gemini] Réponse non-JSON, texte brut utilisé")
             return AnalysisResult(
                 question="Question détectée",
                 answer=text,

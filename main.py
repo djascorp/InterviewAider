@@ -19,6 +19,7 @@ def _capture_loop(
     device_index: Optional[int],
 ) -> None:
     """Background thread for continuous audio capture and analysis."""
+    print(f"[capture] Boucle démarrée (device={device_index})")
     while True:
         if window._paused:
             import time
@@ -31,12 +32,15 @@ def _capture_loop(
             if wav_bytes is None:
                 continue
 
+            print("[state] LISTENING → ANALYZING")
             window.set_analyzing()
 
             result = client.analyze_audio(wav_bytes)
             if result:
+                print(f"[state] ANALYZING → ANSWER")
                 window.answer_result_ready.emit(result)
             else:
+                print("[state] ANALYZING → LISTENING (pas de question)")
                 window.set_listening()
 
         except Exception as e:
@@ -78,10 +82,12 @@ def main() -> int:
     if dialog.exec() == 0:
         return 0
     device_index = dialog.selected_device_index
+    print(f"[init] Périphérique sélectionné : index={device_index}")
 
     # Gemini client
     try:
         client = GeminiClient()
+        print("[init] Client Gemini initialisé")
     except ValueError as e:
         print(f"[error] {e}")
         return 1
@@ -95,6 +101,7 @@ def main() -> int:
     )
 
     window.show()
+    print("[init] Fenêtre overlay affichée")
 
     # System tray icon
     tray = TrayIcon(window)
@@ -116,6 +123,7 @@ def main() -> int:
         daemon=True,
     )
     capture_thread.start()
+    print("[init] Démarrage terminé — en écoute…")
 
     return app.exec()
 

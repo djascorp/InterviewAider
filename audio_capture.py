@@ -45,8 +45,11 @@ def capture_chunk(device_index: Optional[int] = None) -> Optional[bytes]:
         device=device_index,
         blocking=True,
     )
-    if compute_rms(audio) < RMS_THRESHOLD:
+    rms = compute_rms(audio)
+    if rms < RMS_THRESHOLD:
+        print(f"[audio] RMS={rms:.0f} (seuil={RMS_THRESHOLD}) → silence, ignoré")
         return None
+    print(f"[audio] RMS={rms:.0f} (seuil={RMS_THRESHOLD}) → audio détecté, envoi à Gemini")
     return _encode_wav(audio)
 
 

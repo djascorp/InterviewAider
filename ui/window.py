@@ -159,6 +159,7 @@ class AssistantWindow(QWidget):
     def toggle_pause(self) -> None:
         """Toggle pause state."""
         self._paused = not self._paused
+        print(f"[state] {'⏸ EN PAUSE' if self._paused else '▶ REPRISE écoute'}")
         self._header.set_paused(self._paused)
         self._waveform.set_active(not self._paused)
         self._listening_state.set_paused(self._paused)
