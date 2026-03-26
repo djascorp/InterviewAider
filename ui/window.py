@@ -70,10 +70,11 @@ class AssistantWindow(QWidget):
             | Qt.WindowType.FramelessWindowHint
             | Qt.WindowType.Tool
         )
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.setFixedWidth(self.EXPANDED_WIDTH)
+        # self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)  # Transparence désactivée
+        self.setMinimumWidth(self.EXPANDED_WIDTH)
+        self.setMaximumWidth(self.EXPANDED_WIDTH)
         self.setMinimumHeight(100)
-        self.setMaximumHeight(900)
+        self.setMaximumHeight(1200)
         self.setStyleSheet(
             f"""
             QWidget#overlay {{
@@ -213,7 +214,8 @@ class AssistantWindow(QWidget):
 
     def _finalize_collapse(self, width: int) -> None:
         """Lock width after collapse animation finishes."""
-        self.setFixedWidth(width)
+        self.setMinimumWidth(width)
+        self.setMaximumWidth(width)
 
     def toggle_screen_capture_visibility(self) -> None:
         """Toggle visibility in screen capture."""
@@ -258,8 +260,14 @@ class AssistantWindow(QWidget):
             self._analyzing_state.hide()
             self._answer_state.show()
             self._header.set_title("<span style='color:#edeae4'>InterviewAI</span> · réponse prête")
+            # Ajuster la hauteur après un court délai pour laisser le layout se mettre à jour
+            QTimer.singleShot(50, self._adjust_window_height)
 
         self.state_changed.emit(state)
+
+    def _adjust_window_height(self) -> None:
+        """Ajuste la hauteur de la fenêtre en fonction du contenu."""
+        self.adjustSize()
 
     def set_listening(self) -> None:
         """Set overlay to listening state."""

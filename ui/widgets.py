@@ -472,6 +472,7 @@ class AnswerState(QWidget):
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
         self.setObjectName("stateAnswer")
+        self.setMinimumHeight(500)
         self._build_ui()
 
     def _build_ui(self):
@@ -507,7 +508,8 @@ class AnswerState(QWidget):
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         scroll.setStyleSheet(SCROLLBAR_STYLE)
-        scroll.setMaximumHeight(550)
+        scroll.setMinimumHeight(400)
+        scroll.setMaximumHeight(800)
 
         self.answer_content = QWidget()
         self.answer_content.setStyleSheet("background: transparent;")
@@ -529,7 +531,7 @@ class AnswerState(QWidget):
         a_layout.addStretch()
 
         scroll.setWidget(self.answer_content)
-        layout.addWidget(scroll)
+        layout.addWidget(scroll, 1)  # stretch factor = 1 pour prendre l'espace disponible
 
         # Action bar
         self.action_bar = QWidget()
