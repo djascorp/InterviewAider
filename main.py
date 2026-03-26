@@ -6,7 +6,7 @@ from typing import Optional
 
 from PyQt6.QtWidgets import QApplication
 
-from audio_capture import capture_chunk, list_loopback_devices
+from audio_capture import capture_chunk, flush_pending_capture, list_loopback_devices, set_paused
 from gemini_client import GeminiClient
 from ui.dialogs import DeviceSelectorDialog, TrayIcon
 from ui.window import AssistantWindow
@@ -20,11 +20,18 @@ def _capture_loop(
 ) -> None:
     """Background thread for continuous audio capture and analysis."""
     print(f"[capture] Boucle démarrée (device={device_holder[0]})")
+    was_paused = False
     while True:
         if window._paused:
+            if not was_paused:
+                set_paused(True)
+                was_paused = True
             import time
             time.sleep(0.3)
             continue
+        elif was_paused:
+            set_paused(False)
+            was_paused = False
 
         try:
             wav_bytes = capture_chunk(device_holder[0])
@@ -56,6 +63,7 @@ def _on_regenerate(
     """Handle retry: capture fresh audio and re-analyze."""
     def _run():
         try:
+            flush_pending_capture()
             wav_bytes = capture_chunk(device_holder[0])
             if wav_bytes is None:
                 window.set_listening()

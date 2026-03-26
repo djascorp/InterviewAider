@@ -61,7 +61,7 @@ class StatusDot(QWidget):
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._animate)
         self._phase = 0.0
-        self._timer.start(30)
+        self._timer.start(50)
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -70,7 +70,6 @@ class StatusDot(QWidget):
             color = QColor(COLORS["text3"])
         else:
             color = QColor(COLORS["green"])
-            # Green glow/shadow when active
             glow = QColor(COLORS["green"])
             glow.setAlpha(80)
             painter.setPen(Qt.PenStyle.NoPen)
@@ -84,10 +83,9 @@ class StatusDot(QWidget):
     def _animate(self):
         if self._paused:
             return
-        self._phase += 0.035
+        self._phase += 0.055
         if self._phase > 2 * math.pi:
             self._phase -= 2 * math.pi
-        # Breathe: opacity oscillates between 0.5 and 1.0
         opacity = 0.75 + 0.25 * math.cos(self._phase)
         self._opacity_effect.setOpacity(opacity)
 
@@ -185,49 +183,48 @@ class HeaderWidget(QWidget):
         self.pause_btn.setToolTip("Reprendre (Espace)" if paused else "Pause (Espace)")
 
 
-class WaveBar(QLabel):
+class WaveBar(QWidget):
     """Single animated waveform bar."""
 
     def __init__(self, duration: int = 800, parent: QWidget | None = None):
         super().__init__(parent)
-        self.setObjectName("waveBar")
-        self.setStyleSheet(WAVE_BAR_STYLE)
         self.setFixedWidth(3)
         self._min_height = 3
         self._max_height = 18
-        self._current = self._min_height
+        self._current = float(self._min_height)
         self._direction = 1
         self._duration = duration
-        self._paused = False
+        self._active = True
+        self._color = QColor(COLORS['green'])
+        self._dim_color = QColor(168, 224, 99, 38)
         self.setFixedHeight(self._min_height)
 
-        self._timer = QTimer(self)
-        self._timer.timeout.connect(self._animate)
-
-    def start(self):
-        self._paused = False
-        self._timer.start(30)
-
-    def stop(self):
-        self._paused = True
-        self._timer.stop()
-        self.setFixedHeight(self._min_height)
-        self.setStyleSheet(f"background: rgba(168,224,99,0.15); border-radius: 1px;")
-
-    def _animate(self):
-        if self._paused:
+    def tick(self):
+        """Called by parent's shared timer."""
+        if not self._active:
             return
-
         step = (self._max_height - self._min_height) / (self._duration / 30)
         self._current += self._direction * step
-
         if self._current >= self._max_height:
             self._direction = -1
         elif self._current <= self._min_height:
             self._direction = 1
-
         self.setFixedHeight(int(self._current))
-        self.setStyleSheet(WAVE_BAR_STYLE)
+
+    def set_active(self, active: bool):
+        self._active = active
+        if not active:
+            self._current = float(self._min_height)
+            self.setFixedHeight(self._min_height)
+        self.update()
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(self._color if self._active else self._dim_color)
+        painter.drawRoundedRect(0, 0, self.width(), self.height(), 1, 1)
+        painter.end()
 
 
 class WaveformStrip(QWidget):
@@ -240,16 +237,19 @@ class WaveformStrip(QWidget):
         self.setStyleSheet(WAVE_STRIP_STYLE)
         self._build_ui()
 
+        self._timer = QTimer(self)
+        self._timer.timeout.connect(self._tick_all)
+        self._timer.start(30)
+
     def _build_ui(self):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(12, 7, 12, 7)
         layout.setSpacing(2)
 
         self.bars: list[WaveBar] = []
-        durations = [550, 800, 650, 1000, 700, 900, 600, 1100, 750, 850, 500, 950, 680, 1050, 720, 880, 580, 930]
+        durations = [550, 800, 650, 1000, 700, 900, 600, 1100, 750, 850, 500, 950, 680, 1050]
         for d in durations:
             bar = WaveBar(d, self)
-            bar.start()
             self.bars.append(bar)
             layout.addWidget(bar)
 
@@ -261,13 +261,17 @@ class WaveformStrip(QWidget):
         self.meta_label.setStyleSheet(WAVE_META_STYLE)
         layout.addWidget(self.meta_label)
 
-    def set_active(self, active: bool):
+    def _tick_all(self):
         for bar in self.bars:
-            if active:
-                bar.start()
-                bar.setStyleSheet(WAVE_BAR_STYLE)
-            else:
-                bar.stop()
+            bar.tick()
+
+    def set_active(self, active: bool):
+        if active:
+            self._timer.start(30)
+        else:
+            self._timer.stop()
+        for bar in self.bars:
+            bar.set_active(active)
 
 
 class ListeningState(QWidget):
@@ -313,7 +317,7 @@ class ListeningState(QWidget):
         self._ring_phase = 0.0
         self._ring_timer = QTimer(self)
         self._ring_timer.timeout.connect(self._animate_ring)
-        self._ring_timer.start(30)
+        self._ring_timer.start(50)
 
         layout.addWidget(icon_container, alignment=Qt.AlignmentFlag.AlignCenter)
 
@@ -329,7 +333,7 @@ class ListeningState(QWidget):
 
     def _animate_ring(self):
         # ring-pulse: scale 0.85→1.3, opacity 0.6→0, over ~2s
-        self._ring_phase += 0.015  # ~2s cycle at 30ms interval
+        self._ring_phase += 0.025  # ~2s cycle at 50ms interval
         if self._ring_phase > 1.0:
             self._ring_phase = 0.0
         # Opacity: 0.6 → 0
@@ -400,7 +404,7 @@ class AnalyzingState(QWidget):
 
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._animate)
-        self._timer.start(40)
+        self._timer.start(50)
 
     def _animate(self):
         # adot-pulse: 1.2s cycle, 0%/100% opacity=0.2 scale=0.8, 50% opacity=1 scale=1.1
@@ -483,7 +487,7 @@ class AnswerState(QWidget):
         q_layout.setContentsMargins(14, 10, 14, 10)
         q_layout.setSpacing(4)
 
-        self.question_tag = QLabel("QUESTION DETECTEE")
+        self.question_tag = QLabel("QUESTION DÉTECTÉE")
         self.question_tag.setObjectName("questionTag")
         self.question_tag.setStyleSheet(QUESTION_TAG_STYLE)
         q_layout.addWidget(self.question_tag)
@@ -503,7 +507,7 @@ class AnswerState(QWidget):
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         scroll.setStyleSheet(SCROLLBAR_STYLE)
-        scroll.setMaximumHeight(260)
+        scroll.setMaximumHeight(300)
 
         self.answer_content = QWidget()
         self.answer_content.setStyleSheet("background: transparent;")

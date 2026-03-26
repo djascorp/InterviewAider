@@ -232,8 +232,10 @@ QUESTION_TAG_STYLE = f"""
     QLabel#questionTag {{
         color: {COLORS['green']};
         font-family: {FONTS['mono']};
-        font-size: 9px;
+        font-size: 10px;
+        font-weight: 600;
         letter-spacing: 0.08em;
+        text-transform: uppercase;
     }}
 """
 
@@ -259,8 +261,8 @@ ANSWER_BODY_STYLE = f"""
 ANSWER_MAIN_STYLE = f"""
     QLabel#answerMain {{
         color: {COLORS['text']};
-        font-size: 12.5px;
-        line-height: 1.7;
+        font-size: 13px;
+        line-height: 1.75;
         font-weight: 300;
     }}
 """
@@ -297,7 +299,7 @@ BULLET_DASH_STYLE = f"""
 BULLET_TEXT_STYLE = f"""
     QLabel#bulletText {{
         color: {COLORS['text2']};
-        font-size: 11px;
+        font-size: 11.5px;
         line-height: 1.5;
     }}
 """
