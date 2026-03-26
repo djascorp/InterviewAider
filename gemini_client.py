@@ -12,7 +12,7 @@ from google.genai import types
 
 load_dotenv()
 
-_MODEL_NAME = "gemini-2-flash"
+_MODEL_NAME = "gemini-3-flash-preview"
 
 _SYSTEM_PROMPT = """\
 Tu es un assistant d'entretien technique discret.
