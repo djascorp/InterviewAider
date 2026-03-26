@@ -14,12 +14,23 @@ DTYPE = np.int16
 RMS_THRESHOLD = 500
 
 
+_LOOPBACK_KEYWORDS = ["stereo mix", "mixage", "loopback", "what u hear", "wave out"]
+
+
 def list_loopback_devices() -> list[dict]:
-    """List all input devices (including loopback)."""
+    """List all input devices, flagging likely loopback/stereo-mix ones."""
     devices = []
     for i, d in enumerate(sd.query_devices()):
         if d["max_input_channels"] > 0:
-            devices.append({"index": i, "name": d["name"], "channels": d["max_input_channels"]})
+            name = d["name"]
+            is_loopback = any(kw in name.lower() for kw in _LOOPBACK_KEYWORDS)
+            devices.append({
+                "index": i,
+                "name": name,
+                "channels": d["max_input_channels"],
+                "is_loopback": is_loopback,
+                "host_api": sd.query_hostapis(d["hostapi"])["name"],
+            })
     return devices
 
 

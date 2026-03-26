@@ -23,7 +23,7 @@ class DeviceSelectorDialog(QDialog):
     def __init__(self, devices: list[dict], parent=None):
         super().__init__(parent)
         self.setWindowTitle("Interview Assistant — Audio Device")
-        self.setFixedSize(400, 200)
+        self.setFixedSize(520, 220)
         self.setStyleSheet(f"""
             QDialog {{
                 background: {COLORS['bg_hex']};
@@ -74,8 +74,17 @@ class DeviceSelectorDialog(QDialog):
         layout.addWidget(subtitle)
 
         self._combo = QComboBox()
-        for d in self._devices:
-            self._combo.addItem(f"[{d['index']}] {d['name']} ({d['channels']}ch)", d['index'])
+        first_loopback_idx = -1
+        for i, d in enumerate(self._devices):
+            is_lb = d.get("is_loopback", False)
+            host = d.get("host_api", "")
+            tag = " ★ LOOPBACK" if is_lb else ""
+            label = f"[{d['index']}] {d['name']} ({d['channels']}ch · {host}){tag}"
+            self._combo.addItem(label, d["index"])
+            if is_lb and first_loopback_idx == -1:
+                first_loopback_idx = i
+        if first_loopback_idx >= 0:
+            self._combo.setCurrentIndex(first_loopback_idx)
         layout.addWidget(self._combo)
 
         layout.addStretch()
