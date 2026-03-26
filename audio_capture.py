@@ -7,10 +7,12 @@ noise floor. Replaces the old fixed 3-second chunk approach.
 
 import io
 import math
+import os
 import queue
 import threading
 import wave
 from collections import deque
+from datetime import datetime
 from enum import Enum
 from typing import Optional
 
@@ -46,10 +48,23 @@ _ENERGY_GATE_DB = 6  # frame must be this many dB above noise floor
 _CALLBACK_BLOCK_MS = 30  # sounddevice callback block size
 _CALLBACK_BLOCK = SAMPLERATE * _CALLBACK_BLOCK_MS // 1000  # ~1323 samples
 _RAW_QUEUE_MAXSIZE = 100  # ~3 seconds of raw audio
-_SEGMENT_QUEUE_MAXSIZE = 2  # only keep latest segments
+_SEGMENT_QUEUE_MAXSIZE = 1  # only keep the latest segment
+
+# ── Audio dump ────────────────────────────────────────────────────────
+_AUDIO_DUMP_DIR = "tmp_audio_recordings"
 
 # ── Device detection keywords ────────────────────────────────────────
 _LOOPBACK_KEYWORDS = ["stereo mix", "mixage", "loopback", "what u hear", "wave out"]
+
+
+def _save_audio_dump(wav_bytes: bytes) -> None:
+    """Save audio segment to tmp_audio_recordings/ with timestamp."""
+    os.makedirs(_AUDIO_DUMP_DIR, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
+    filepath = os.path.join(_AUDIO_DUMP_DIR, f"audio_{timestamp}.wav")
+    with open(filepath, "wb") as f:
+        f.write(wav_bytes)
+    print(f"[audio] Fichier sauvegardé : {filepath}")
 
 
 class _VadState(Enum):
@@ -317,6 +332,9 @@ class VadCaptureService:
         wav_bytes = _encode_wav(full_audio)
         duration_sec = len(full_audio) / (SAMPLERATE * CHANNELS)
         print(f"[vad] Segment finalisé : {duration_sec:.1f}s ({len(wav_bytes)} bytes)")
+
+        # Save audio dump
+        _save_audio_dump(wav_bytes)
 
         # Push to segment queue (drop oldest if full)
         if self._segment_queue.full():

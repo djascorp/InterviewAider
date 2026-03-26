@@ -42,6 +42,7 @@ def _capture_loop(
             print("[state] LISTENING → ANALYZING")
             window.set_analyzing()
 
+            flush_pending_capture()  # discard stale audio before analysis
             result = client.analyze_audio(wav_bytes)
             if result:
                 print("[state] ANALYZING → ANSWER")

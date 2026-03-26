@@ -2,7 +2,7 @@
 
 # Color palette matching the UI/UX design
 COLORS = {
-    "bg": "rgba(10, 10, 12, 0.96)",
+    "bg": "rgba(10, 10, 12, 1.0)",
     "bg_hex": "#0a0a0c",
     "bg2": "rgba(255,255,255,0.04)",
     "bg3": "rgba(255,255,255,0.07)",
@@ -35,7 +35,7 @@ OVERLAY_STYLE = f"""
 # Header styles
 HEADER_STYLE = f"""
     QWidget#header {{
-        background: transparent;
+        background: #0a0a0c;
         border-bottom: 1px solid {COLORS['border']};
         border-top-left-radius: 14px;
         border-top-right-radius: 14px;
@@ -251,7 +251,7 @@ ANSWER_BODY_STYLE = f"""
     QScrollArea#answerBody {{
         background: transparent;
         border: none;
-        max-height: 260px;
+        max-height: 550px;
     }}
     QScrollArea#answerBody > QWidget {{
         background: transparent;

@@ -507,7 +507,7 @@ class AnswerState(QWidget):
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         scroll.setStyleSheet(SCROLLBAR_STYLE)
-        scroll.setMaximumHeight(300)
+        scroll.setMaximumHeight(550)
 
         self.answer_content = QWidget()
         self.answer_content.setStyleSheet("background: transparent;")

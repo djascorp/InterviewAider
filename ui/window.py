@@ -73,7 +73,7 @@ class AssistantWindow(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setFixedWidth(self.EXPANDED_WIDTH)
         self.setMinimumHeight(100)
-        self.setMaximumHeight(600)
+        self.setMaximumHeight(900)
         self.setStyleSheet(
             f"""
             QWidget#overlay {{
