@@ -11,7 +11,7 @@ SAMPLERATE = 44100
 CHANNELS = 2
 CHUNK_SEC = 3
 DTYPE = np.int16
-RMS_THRESHOLD = 500
+RMS_THRESHOLD = 200
 
 
 _LOOPBACK_KEYWORDS = ["stereo mix", "mixage", "loopback", "what u hear", "wave out"]
