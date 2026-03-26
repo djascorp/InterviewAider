@@ -263,11 +263,11 @@ class AssistantWindow(QWidget):
 
     def set_listening(self) -> None:
         """Set overlay to listening state."""
-        self._set_state(OverlayState.LISTENING)
+        QTimer.singleShot(0, lambda: self._set_state(OverlayState.LISTENING))
 
     def set_analyzing(self) -> None:
         """Set overlay to analyzing state."""
-        self._set_state(OverlayState.ANALYZING)
+        QTimer.singleShot(0, lambda: self._set_state(OverlayState.ANALYZING))
         self.analyzing_started.emit()
 
     def set_answer(self, question: str, answer: str, bullets: list[str], latency: str = "1.0s") -> None:
@@ -289,7 +289,8 @@ class AssistantWindow(QWidget):
 
     def _on_result(self, result) -> None:
         """Handle structured AnalysisResult from Gemini."""
-        self.set_answer(result.question, result.answer, result.bullets, result.latency)
+        # Use QTimer to ensure UI updates happen on main thread
+        QTimer.singleShot(0, lambda: self.set_answer(result.question, result.answer, result.bullets, result.latency))
 
     def _copy_answer(self) -> None:
         """Copy the current answer to clipboard."""
