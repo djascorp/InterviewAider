@@ -16,10 +16,10 @@ from utils.global_hotkeys import GlobalHotkeys
 def _capture_loop(
     window: AssistantWindow,
     client: GeminiClient,
-    device_index: Optional[int],
+    device_holder: list,
 ) -> None:
     """Background thread for continuous audio capture and analysis."""
-    print(f"[capture] Boucle démarrée (device={device_index})")
+    print(f"[capture] Boucle démarrée (device={device_holder[0]})")
     while True:
         if window._paused:
             import time
@@ -27,7 +27,7 @@ def _capture_loop(
             continue
 
         try:
-            wav_bytes = capture_chunk(device_index)
+            wav_bytes = capture_chunk(device_holder[0])
 
             if wav_bytes is None:
                 continue
@@ -37,7 +37,7 @@ def _capture_loop(
 
             result = client.analyze_audio(wav_bytes)
             if result:
-                print(f"[state] ANALYZING → ANSWER")
+                print("[state] ANALYZING → ANSWER")
                 window.answer_result_ready.emit(result)
             else:
                 print("[state] ANALYZING → LISTENING (pas de question)")
@@ -51,12 +51,12 @@ def _capture_loop(
 def _on_regenerate(
     window: AssistantWindow,
     client: GeminiClient,
-    device_index: Optional[int],
+    device_holder: list,
 ) -> None:
     """Handle retry: capture fresh audio and re-analyze."""
     def _run():
         try:
-            wav_bytes = capture_chunk(device_index)
+            wav_bytes = capture_chunk(device_holder[0])
             if wav_bytes is None:
                 window.set_listening()
                 return
@@ -72,6 +72,22 @@ def _on_regenerate(
     threading.Thread(target=_run, daemon=True).start()
 
 
+def _on_settings(window: AssistantWindow, device_holder: list) -> None:
+    """Open device selector dialog and update capture device."""
+    was_paused = window._paused
+    if not was_paused:
+        window.toggle_pause()
+
+    devices = list_loopback_devices()
+    dialog = DeviceSelectorDialog(devices)
+    if dialog.exec() != 0:
+        device_holder[0] = dialog.selected_device_index
+        print(f"[settings] Périphérique changé : index={device_holder[0]}")
+
+    if not was_paused:
+        window.toggle_pause()
+
+
 def main() -> int:
     """Application entry point."""
     app = QApplication(sys.argv)
@@ -81,8 +97,8 @@ def main() -> int:
     dialog = DeviceSelectorDialog(devices)
     if dialog.exec() == 0:
         return 0
-    device_index = dialog.selected_device_index
-    print(f"[init] Périphérique sélectionné : index={device_index}")
+    device_holder = [dialog.selected_device_index]
+    print(f"[init] Périphérique sélectionné : index={device_holder[0]}")
 
     # Gemini client
     try:
@@ -97,7 +113,12 @@ def main() -> int:
 
     # Connect retry to actual re-capture
     window.regenerate_requested.connect(
-        lambda: _on_regenerate(window, client, device_index)
+        lambda: _on_regenerate(window, client, device_holder)
+    )
+
+    # Connect settings button
+    window.settings_requested.connect(
+        lambda: _on_settings(window, device_holder)
     )
 
     window.show()
@@ -119,7 +140,7 @@ def main() -> int:
     # Audio capture thread
     capture_thread = threading.Thread(
         target=_capture_loop,
-        args=(window, client, device_index),
+        args=(window, client, device_holder),
         daemon=True,
     )
     capture_thread.start()

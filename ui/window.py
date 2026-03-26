@@ -34,6 +34,7 @@ class AssistantWindow(QWidget):
     regenerate_requested = pyqtSignal()
     analyzing_started = pyqtSignal()
     answer_result_ready = pyqtSignal(object)
+    settings_requested = pyqtSignal()
 
     EXPANDED_WIDTH = 340
     COLLAPSED_WIDTH = 180
@@ -123,6 +124,7 @@ class AssistantWindow(QWidget):
         self._header.pause_clicked.connect(self.toggle_pause)
         self._header.collapse_clicked.connect(self.toggle_collapse)
         self._header.hide_clicked.connect(self.toggle_screen_capture_visibility)
+        self._header.settings_clicked.connect(self.settings_requested.emit)
         self._answer_state.copy_clicked.connect(self._copy_answer)
         self._answer_state.regenerate_clicked.connect(self._on_regenerate)
         self._answer_state.prev_clicked.connect(self.show_previous)

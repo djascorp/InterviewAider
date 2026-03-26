@@ -119,6 +119,7 @@ class HeaderWidget(QWidget):
     pause_clicked = pyqtSignal()
     collapse_clicked = pyqtSignal()
     hide_clicked = pyqtSignal()
+    settings_clicked = pyqtSignal()
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
@@ -155,6 +156,14 @@ class HeaderWidget(QWidget):
         self.collapse_btn.setToolTip("Réduire")
         self.collapse_btn.clicked.connect(self.collapse_clicked.emit)
         layout.addWidget(self.collapse_btn)
+
+        self.settings_btn = QPushButton("⚙")
+        self.settings_btn.setObjectName("headerBtn")
+        self.settings_btn.setStyleSheet(HEADER_BTN_STYLE)
+        self.settings_btn.setFixedSize(22, 22)
+        self.settings_btn.setToolTip("Paramètres audio")
+        self.settings_btn.clicked.connect(self.settings_clicked.emit)
+        layout.addWidget(self.settings_btn)
 
         self.hide_btn = QPushButton("◻")
         self.hide_btn.setObjectName("headerBtn")
