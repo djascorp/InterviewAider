@@ -36,3 +36,6 @@ wheels/
 Thumbs.db
 docs/
 venv/
+
+# Temporary files
+tmp_audio_recordings/
