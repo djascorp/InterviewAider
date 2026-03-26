@@ -3,7 +3,7 @@
 from enum import Enum
 from typing import Optional
 
-from PyQt6.QtCore import Qt, pyqtSignal, QPoint, QTimer
+from PyQt6.QtCore import Qt, pyqtSignal, QPoint, QTimer, QPropertyAnimation, QEasingCurve
 from PyQt6.QtGui import QCursor
 from PyQt6.QtWidgets import QApplication, QVBoxLayout, QWidget
 
@@ -32,6 +32,8 @@ class AssistantWindow(QWidget):
     state_changed = pyqtSignal(OverlayState)
     copy_requested = pyqtSignal()
     regenerate_requested = pyqtSignal()
+    analyzing_started = pyqtSignal()
+    answer_result_ready = pyqtSignal(object)
 
     EXPANDED_WIDTH = 340
     COLLAPSED_WIDTH = 180
@@ -42,17 +44,21 @@ class AssistantWindow(QWidget):
         self._state = OverlayState.LISTENING
         self._paused = False
         self._collapsed = False
-        self._hidden_from_capture = False
+        self._hidden_from_capture = True
+        self._positioned = False
         self._dragging = False
         self._drag_offset = QPoint()
         self._current_question: Optional[str] = None
         self._current_answer: Optional[str] = None
         self._current_bullets: list[str] = []
         self._current_latency: str = ""
+        self._history: list[tuple[str, str, list[str], str]] = []
+        self._history_index: int = -1
 
         self._build_ui()
         self._connect_signals()
         self.answer_ready.connect(self._show_answer)
+        self.answer_result_ready.connect(self._on_result)
 
     def _build_ui(self) -> None:
         """Build the UI components."""
@@ -64,7 +70,9 @@ class AssistantWindow(QWidget):
             | Qt.WindowType.Tool
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.setFixedSize(self.EXPANDED_WIDTH, 500)
+        self.setFixedWidth(self.EXPANDED_WIDTH)
+        self.setMinimumHeight(100)
+        self.setMaximumHeight(600)
         self.setStyleSheet(
             f"""
             QWidget#overlay {{
@@ -117,11 +125,30 @@ class AssistantWindow(QWidget):
         self._header.hide_clicked.connect(self.toggle_screen_capture_visibility)
         self._answer_state.copy_clicked.connect(self._copy_answer)
         self._answer_state.regenerate_clicked.connect(self._on_regenerate)
+        self._answer_state.prev_clicked.connect(self.show_previous)
+        self._answer_state.next_clicked.connect(self.show_next)
 
     def showEvent(self, event) -> None:  # noqa: N802
         """Apply screen capture exclusion when window is shown."""
         super().showEvent(event)
         self._apply_screen_capture_exclusion()
+        self._apply_initial_hide_btn_style()
+
+        if not self._positioned:
+            self._positioned = True
+            screen = QApplication.primaryScreen()
+            if screen:
+                geom = screen.availableGeometry()
+                x = geom.right() - self.width() - 20
+                y = geom.top() + 60
+                self.move(x, y)
+
+    def _apply_initial_hide_btn_style(self) -> None:
+        """Set hide button style based on initial _hidden_from_capture state."""
+        if self._hidden_from_capture:
+            self._header.hide_btn.setStyleSheet(
+                f"background: {COLORS['green']}; border-radius: 5px; color: #0a0a0b;"
+            )
 
     def _apply_screen_capture_exclusion(self) -> None:
         """Hide window from screen capture if needed."""
@@ -143,11 +170,11 @@ class AssistantWindow(QWidget):
             self._header.set_title("<span style='color:#edeae4'>InterviewAI</span> · en écoute")
 
     def toggle_collapse(self) -> None:
-        """Toggle collapsed state."""
+        """Toggle collapsed state with smooth animation."""
         self._collapsed = not self._collapsed
 
         if self._collapsed:
-            self.setFixedWidth(self.COLLAPSED_WIDTH)
+            target_width = self.COLLAPSED_WIDTH
             self._waveform.hide()
             self._listening_state.hide()
             self._analyzing_state.hide()
@@ -155,10 +182,35 @@ class AssistantWindow(QWidget):
             self._collapsed_state.show()
             self._header.collapse_btn.setText("+")
         else:
-            self.setFixedWidth(self.EXPANDED_WIDTH)
+            target_width = self.EXPANDED_WIDTH
             self._collapsed_state.hide()
             self._set_state(self._state)
             self._header.collapse_btn.setText("−")
+
+        self.setMinimumWidth(min(self.width(), target_width))
+        self.setMaximumWidth(max(self.width(), target_width))
+
+        anim = QPropertyAnimation(self, b"maximumWidth")
+        anim.setDuration(200)
+        anim.setStartValue(self.width())
+        anim.setEndValue(target_width)
+        anim.setEasingCurve(QEasingCurve.Type.InOutCubic)
+
+        anim_min = QPropertyAnimation(self, b"minimumWidth")
+        anim_min.setDuration(200)
+        anim_min.setStartValue(self.width())
+        anim_min.setEndValue(target_width)
+        anim_min.setEasingCurve(QEasingCurve.Type.InOutCubic)
+
+        anim.finished.connect(lambda: self._finalize_collapse(target_width))
+        self._collapse_anim = anim
+        self._collapse_anim_min = anim_min
+        anim.start()
+        anim_min.start()
+
+    def _finalize_collapse(self, width: int) -> None:
+        """Lock width after collapse animation finishes."""
+        self.setFixedWidth(width)
 
     def toggle_screen_capture_visibility(self) -> None:
         """Toggle visibility in screen capture."""
@@ -213,6 +265,7 @@ class AssistantWindow(QWidget):
     def set_analyzing(self) -> None:
         """Set overlay to analyzing state."""
         self._set_state(OverlayState.ANALYZING)
+        self.analyzing_started.emit()
 
     def set_answer(self, question: str, answer: str, bullets: list[str], latency: str = "1.0s") -> None:
         """Set overlay to answer state with content."""
@@ -220,6 +273,8 @@ class AssistantWindow(QWidget):
         self._current_answer = answer
         self._current_bullets = bullets
         self._current_latency = latency
+        self._history.append((question, answer, bullets, latency))
+        self._history_index = len(self._history) - 1
 
         self._answer_state.set_content(question, answer, bullets, latency)
         self._collapsed_state.set_text(question[:30] + "…" if len(question) > 30 else question)
@@ -228,6 +283,10 @@ class AssistantWindow(QWidget):
     def _show_answer(self, text: str) -> None:
         """Show answer from signal (compatibility with existing code)."""
         self.set_answer("Question détectée", text, [], "1.0s")
+
+    def _on_result(self, result) -> None:
+        """Handle structured AnalysisResult from Gemini."""
+        self.set_answer(result.question, result.answer, result.bullets, result.latency)
 
     def _copy_answer(self) -> None:
         """Copy the current answer to clipboard."""
@@ -247,6 +306,22 @@ class AssistantWindow(QWidget):
         """Handle regenerate request."""
         self.set_analyzing()
         self.regenerate_requested.emit()
+
+    def show_previous(self) -> None:
+        """Show previous answer from history."""
+        if self._history_index > 0:
+            self._history_index -= 1
+            q, a, b, l = self._history[self._history_index]
+            self._answer_state.set_content(q, a, b, l)
+            self._header.set_title(f"<span style='color:#edeae4'>InterviewAI</span> · {self._history_index + 1}/{len(self._history)}")
+
+    def show_next(self) -> None:
+        """Show next answer from history."""
+        if self._history_index < len(self._history) - 1:
+            self._history_index += 1
+            q, a, b, l = self._history[self._history_index]
+            self._answer_state.set_content(q, a, b, l)
+            self._header.set_title(f"<span style='color:#edeae4'>InterviewAI</span> · {self._history_index + 1}/{len(self._history)}")
 
     # Drag functionality
     def mousePressEvent(self, event) -> None:  # noqa: N802
@@ -286,3 +361,7 @@ class AssistantWindow(QWidget):
                 self._on_regenerate()
             elif event.key() == Qt.Key.Key_H:
                 self.toggle_collapse()
+            elif event.key() == Qt.Key.Key_Left:
+                self.show_previous()
+            elif event.key() == Qt.Key.Key_Right:
+                self.show_next()

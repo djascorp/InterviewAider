@@ -95,6 +95,18 @@ HEADER_BTN_STYLE = f"""
     }}
 """
 
+NOTIF_BADGE_STYLE = f"""
+    QLabel#notifBadge {{
+        background: {COLORS['red']};
+        border-radius: 4px;
+        border: 1.5px solid {COLORS['bg_hex']};
+        min-width: 8px;
+        max-width: 8px;
+        min-height: 8px;
+        max-height: 8px;
+    }}
+"""
+
 # Waveform strip
 WAVE_STRIP_STYLE = f"""
     QWidget#waveStrip {{
@@ -123,6 +135,15 @@ WAVE_META_STYLE = f"""
     }}
 """
 
+WAVE_META_BOLD_STYLE = f"""
+    QLabel#waveMetaBold {{
+        color: {COLORS['green']};
+        font-family: {FONTS['mono']};
+        font-size: 10px;
+        font-weight: 500;
+    }}
+"""
+
 # State: Listening
 LISTENING_STYLE = f"""
     QWidget#stateListening {{
@@ -135,11 +156,23 @@ LISTEN_RING_STYLE = f"""
     QLabel#listenRing {{
         background: transparent;
         border: 1.5px solid {COLORS['border2']};
-        border-radius: 18px;
-        min-width: 36px;
-        max-width: 36px;
-        min-height: 36px;
-        max-height: 36px;
+        border-radius: 24px;
+        min-width: 48px;
+        max-width: 48px;
+        min-height: 48px;
+        max-height: 48px;
+    }}
+"""
+
+LISTEN_RING_PULSE_STYLE = f"""
+    QLabel#listenRingPulse {{
+        background: transparent;
+        border: 1px solid {COLORS['green']};
+        border-radius: 30px;
+        min-width: 60px;
+        max-width: 60px;
+        min-height: 60px;
+        max-height: 60px;
     }}
 """
 
@@ -226,9 +259,21 @@ ANSWER_BODY_STYLE = f"""
 ANSWER_MAIN_STYLE = f"""
     QLabel#answerMain {{
         color: {COLORS['text']};
-        font-size: 12px;
+        font-size: 12.5px;
         line-height: 1.7;
         font-weight: 300;
+    }}
+"""
+
+ANSWER_CODE_STYLE = f"""
+    QLabel#answerCode {{
+        color: {COLORS['green']};
+        font-family: {FONTS['mono']};
+        font-size: 11px;
+        background: {COLORS['bg3']};
+        border: 1px solid {COLORS['border2']};
+        border-radius: 3px;
+        padding: 1px 4px;
     }}
 """
 
@@ -311,6 +356,15 @@ LATENCY_STYLE = f"""
     }}
 """
 
+LATENCY_BOLD_STYLE = f"""
+    QLabel#latencyBold {{
+        color: {COLORS['green']};
+        font-family: {FONTS['mono']};
+        font-size: 10px;
+        font-weight: 500;
+    }}
+"""
+
 # Collapsed state
 COLLAPSED_BODY_STYLE = f"""
     QWidget#collapsedBody {{
@@ -346,3 +400,21 @@ SCROLLBAR_STYLE = f"""
         background: transparent;
     }}
 """
+
+# Resize handle hint (bottom-right corner)
+RESIZE_HINT_STYLE = f"""
+    QLabel#resizeHint {{
+        background: transparent;
+        min-width: 10px;
+        max-width: 10px;
+        min-height: 10px;
+        max-height: 10px;
+        color: {COLORS['text3']};
+        font-size: 10px;
+    }}
+"""
+
+# Smooth transition helper values (for use in QPropertyAnimation)
+TRANSITION_DURATION_MS = 300
+TRANSITION_FAST_MS = 150
+TRANSITION_EASING = "cubic-bezier(0.4, 0, 0.2, 1)"

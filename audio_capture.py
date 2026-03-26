@@ -11,6 +11,7 @@ SAMPLERATE = 44100
 CHANNELS = 2
 CHUNK_SEC = 3
 DTYPE = np.int16
+RMS_THRESHOLD = 500
 
 
 def list_loopback_devices() -> list[dict]:
@@ -29,7 +30,11 @@ def print_loopback_devices() -> None:
         print(f"[{d['index']}] {d['name']} ({d['channels']} channels)")
 
 
-def capture_chunk(device_index: Optional[int] = None) -> bytes:
+def compute_rms(pcm: np.ndarray) -> float:
+    return float(np.sqrt(np.mean(pcm.astype(np.float64) ** 2)))
+
+
+def capture_chunk(device_index: Optional[int] = None) -> Optional[bytes]:
     """Capture CHUNK_SEC seconds of system audio and return WAV bytes."""
     frames = SAMPLERATE * CHUNK_SEC
     audio = sd.rec(
@@ -40,6 +45,8 @@ def capture_chunk(device_index: Optional[int] = None) -> bytes:
         device=device_index,
         blocking=True,
     )
+    if compute_rms(audio) < RMS_THRESHOLD:
+        return None
     return _encode_wav(audio)
 
 
