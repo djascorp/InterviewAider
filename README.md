@@ -96,4 +96,4 @@ InterviewAider/
 
 ## Licence
 
-Ce projet est distribue sous licence MIT. Voir le fichier [LICENSE](LICENSE).
+Ce projet est distribue sous licence **Creative Commons Attribution-NonCommercial 4.0 (CC BY-NC 4.0)**. Usage non-commercial uniquement. Pour une licence commerciale, contactez l'auteur. Voir le fichier [LICENSE](LICENSE).
