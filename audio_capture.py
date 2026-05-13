@@ -36,13 +36,13 @@ _OUTPUT_RATE = 16000
 _OUTPUT_CHANNELS = 1
 
 # ── Segmentation parameters ──────────────────────────────────────────
-_PRE_ROLL_MS = 400  # keep 400ms before speech onset
+_PRE_ROLL_MS = 200  # keep 200ms before speech onset
 _SPEECH_START_FRAMES = 2  # voiced frames needed to trigger (out of last 3)
 _SPEECH_START_WINDOW = 3
-_SILENCE_END_MS = 1200  # silence duration to end segment
-_MIN_SEGMENT_MS = 500  # reject segments shorter than this
+_SILENCE_END_MS = 700  # silence duration to end segment (was 1200ms)
+_MIN_SEGMENT_MS = 400  # reject segments shorter than this
 _MAX_SEGMENT_SEC = 15  # hard max segment length
-_TAIL_KEEP_MS = 500  # keep trailing silence to avoid cutting last words
+_TAIL_KEEP_MS = 250  # keep trailing silence to avoid cutting last words
 
 # ── Adaptive noise floor ─────────────────────────────────────────────
 _NOISE_EMA_ALPHA = 0.02  # slow EMA for noise floor
@@ -52,7 +52,7 @@ _ENERGY_GATE_DB = 6  # frame must be this many dB above noise floor
 _CALLBACK_BLOCK_MS = 30  # sounddevice callback block size
 _CALLBACK_BLOCK = SAMPLERATE * _CALLBACK_BLOCK_MS // 1000  # 480 samples
 _RAW_QUEUE_MAXSIZE = 100  # ~3 seconds of raw audio
-_SEGMENT_QUEUE_MAXSIZE = 1  # only keep the latest segment
+_SEGMENT_QUEUE_MAXSIZE = 5  # pipeline: queue segments during Gemini analysis
 
 # ── Audio dump ────────────────────────────────────────────────────────
 _AUDIO_DUMP_DIR = "tmp_audio_recordings"
@@ -428,7 +428,7 @@ def list_loopback_devices() -> list[dict]:
 def capture_chunk(device_index: Optional[int] = None) -> Optional[bytes]:
     """Return next completed speech segment as WAV bytes, or None."""
     service = _get_or_restart_service(device_index)
-    return service.get_next_segment(timeout=0.25)
+    return service.get_next_segment(timeout=0.05)
 
 
 def set_paused(paused: bool) -> None:

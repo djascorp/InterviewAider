@@ -1,8 +1,9 @@
 """Main entry point for Interview Assistant."""
 
+import queue
 import sys
 import threading
-from typing import Optional
+import time
 
 from PyQt6.QtWidgets import QApplication
 
@@ -12,13 +13,15 @@ from ui.dialogs import DeviceSelectorDialog, TrayIcon
 from ui.window import AssistantWindow
 from utils.global_hotkeys import GlobalHotkeys
 
+_ANALYSIS_QUEUE_MAXSIZE = 3
+
 
 def _capture_loop(
     window: AssistantWindow,
-    client: GeminiClient,
+    analysis_queue: queue.Queue,
     device_holder: list,
 ) -> None:
-    """Background thread for continuous audio capture and analysis."""
+    """Capture thread: reads VAD segments and forwards to analysis queue."""
     print(f"[capture] Boucle démarrée (device={device_holder[0]})")
     was_paused = False
     while True:
@@ -26,8 +29,7 @@ def _capture_loop(
             if not was_paused:
                 set_paused(True)
                 was_paused = True
-            import time
-            time.sleep(0.3)
+            time.sleep(0.1)
             continue
         elif was_paused:
             set_paused(False)
@@ -35,14 +37,37 @@ def _capture_loop(
 
         try:
             wav_bytes = capture_chunk(device_holder[0])
-
             if wav_bytes is None:
                 continue
 
-            print("[state] LISTENING → ANALYZING")
+            print("[capture] Segment prêt → file d'analyse")
             window.set_analyzing()
+            # Drop oldest if analysis worker is busy and queue is full
+            if analysis_queue.full():
+                try:
+                    analysis_queue.get_nowait()
+                except queue.Empty:
+                    pass
+            analysis_queue.put_nowait(wav_bytes)
+        except Exception as e:
+            print(f"[error] capture: {e}")
 
-            flush_pending_capture()  # discard stale audio before analysis
+
+def _analysis_worker(
+    window: AssistantWindow,
+    client: GeminiClient,
+    analysis_queue: queue.Queue,
+) -> None:
+    """Analysis thread: calls Gemini independently from audio capture."""
+    print("[analysis] Worker démarré")
+    while True:
+        try:
+            wav_bytes = analysis_queue.get(timeout=0.5)
+        except queue.Empty:
+            continue
+
+        flush_pending_capture()
+        try:
             result = client.analyze_audio(wav_bytes)
             if result:
                 print("[state] ANALYZING → ANSWER")
@@ -50,9 +75,8 @@ def _capture_loop(
             else:
                 print("[state] ANALYZING → LISTENING (pas de question)")
                 window.set_listening()
-
         except Exception as e:
-            print(f"[error] {e}")
+            print(f"[error] analysis: {e}")
             window.set_listening()
 
 
@@ -146,13 +170,24 @@ def main() -> int:
     )
     hotkeys.start()
 
-    # Audio capture thread
+    # Shared queue between capture and analysis
+    analysis_queue: queue.Queue = queue.Queue(maxsize=_ANALYSIS_QUEUE_MAXSIZE)
+
+    # Capture thread: reads VAD segments only (no Gemini call)
     capture_thread = threading.Thread(
         target=_capture_loop,
-        args=(window, client, device_holder),
+        args=(window, analysis_queue, device_holder),
         daemon=True,
     )
     capture_thread.start()
+
+    # Analysis thread: calls Gemini independently from capture
+    analysis_thread = threading.Thread(
+        target=_analysis_worker,
+        args=(window, client, analysis_queue),
+        daemon=True,
+    )
+    analysis_thread.start()
     print("[init] Démarrage terminé — en écoute…")
 
     return app.exec()
